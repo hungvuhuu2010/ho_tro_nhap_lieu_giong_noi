@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ứng dụng Nhập liệu Giọng nói Excel</title>
+    <!-- Nhúng thư viện SheetJS (xlsx) để đọc và ghi tệp Excel trên trình duyệt -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-container">
+    <!-- HEADER -->
+    <header class="app-header">
+        <div>
+            <h1>Ứng Dụng Nhập Liệu Giọng Nói Excel</h1>
+            <p>Hỗ trợ đọc giọng nói tiếng Việt, chuẩn hóa dữ liệu và lưu trực tiếp vào tệp Excel (.xlsx)</p>
+        </div>
+        <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
+            <button class="button secondary" id="btnFullScreen" onclick="toggleFullScreen()" title="Phóng to toàn màn hình" style="padding: 8px 12px; font-size: 14px;">🖥️ Toàn màn hình</button>
+            <div class="header-status">
+                <span id="fileStatusBadge" class="status-badge">Chưa mở tệp Excel</span>
+            </div>
+        </div>
+    </header>
+	
+    <!-- NAVIGATION TABS -->
+<div class="app-tabs">
+    <button class="tab-btn active" onclick="switchTab('inputTab')">Nhập liệu</button>
+    <button class="tab-btn" onclick="switchTab('configTab')">Chọn tệp cơ sở dữ liệu hoặc tạo mẫu</button>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="main-content">
+
+    <!-- TAB 1: NHẬP LIỆU (MẶC ĐỊNH) -->
+    <div id="inputTab" class="tab-content active">
+        
+        <!-- CARD 1: FORM NHẬP LIỆU ĐỘNG -->
+        <div class="card">
+            <div class="section-title">
+                <div class="section-number">1</div>
+                <div>
+                    <h2>Biểu Mẫu Nhập Liệu Tự Động</h2>
+                    <p>Nhập liệu trực tiếp bằng bàn phím hoặc nhấn nút Micro để đọc giọng nói tiếng Việt.</p>
+                </div>
+            </div>
+
+            <div id="dynamicFormContainer">
+                <div class="info-box">Vui lòng kết nối tệp Excel hoặc thiết lập trường thông tin ở thẻ "Chọn tệp cơ sở dữ liệu hoặc tạo mẫu".</div>
+            </div>
+
+            <div class="matrix-action-toolbar" style="margin-top: 20px;">
+                <button class="button success large" id="btnAddRecord" disabled>Thêm</button>
+            </div>
+        </div>
+
+        <!-- CARD 2: BẢNG DỮ LIỆU (GIỐNG GOOGLE SHEETS) -->
+        <div class="card">
+            <div class="section-title">
+                <div class="section-number">2</div>
+                <div>
+                    <h2>Bảng Dữ Liệu Trực Quan</h2>
+                    <p>Dữ liệu được cập nhật tức thì và lưu thẳng vào tệp Excel khi bấm Thêm.</p>
+                </div>
+            </div>
+
+            <div class="question-matrix-wrapper">
+                <table class="detail-matrix-table" id="dataTable">
+                    <thead>
+                        <tr id="tableHeaderRow">
+                            <th>STT</th>
+                            <th>Chưa có dữ liệu</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBodyRows">
+                        <tr>
+                            <td colspan="2" class="text-center">Chưa có bản ghi nào.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TAB 2: CHỌN TỆP CƠ SỞ DỮ LIỆU HOẶC TẠO MẪU -->
+    <div id="configTab" class="tab-content">
+        
+        <!-- CARD 1: KẾT NỐI TỆP EXCEL -->
+        <div class="card">
+            <div class="section-title">
+                <div class="section-number">1</div>
+                <div>
+                    <h2>Liên Kết Tệp Cơ Sở Dữ Liệu</h2>
+                    <p>Chọn tệp Excel nguồn để nạp cấu trúc trường và ghi dữ liệu trực tiếp (tự động ghi nhớ quyền cho các lần sau).</p>
+                </div>
+            </div>
+            
+            <div class="excel-upload-box">
+                <button class="button primary" id="btnOpenFile">Chọn tệp Excel (.xlsx)</button>
+                <span id="selectedFileName" class="file-info-text">Chưa chọn tệp nào. Bạn có thể mở tệp có sẵn hoặc tạo tệp mẫu mới bên dưới.</span>
+            </div>
+        </div>
+
+        <!-- CARD 2: TÙY CHỌN CẤU TRÚC VÀ TẠO MẪU -->
+        <div class="card">
+            <div class="section-title">
+                <div class="section-number">2</div>
+                <div>
+                    <h2>Tùy Chỉnh Trường Thông Tin & Tạo Mẫu</h2>
+                    <p>Thêm nhanh các trường dữ liệu hoặc tải lên tệp Excel mẫu mới.</p>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Thêm trường nhanh:</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="newFieldName" placeholder="Tên trường (Ví dụ: Số điện thoại)">
+                        <select id="newFieldType">
+                            <option value="text">Văn bản thường</option>
+                            <option value="date">Ngày tháng</option>
+                            <option value="number">Số</option>
+                        </select>
+                        <button class="button primary" id="btnAddField">Thêm</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Tạo tệp Excel mẫu mới:</label>
+                    <button class="button secondary" id="btnCreateNewTemplate">Tạo tệp mẫu trống & Tải xuống</button>
+                </div>
+            </div>
+
+            <div class="sub-section">
+                <h3>Danh sách các trường hiện tại trong biểu mẫu:</h3>
+                <div class="question-matrix-wrapper">
+                    <table class="detail-matrix-table" id="configFieldTable">
+                        <thead>
+                            <tr>
+                                <th>STT</th>
+                                <th>Tên Trường (Cột Excel)</th>
+                                <th>Kiểu Dữ Liệu</th>
+                                <th>Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="configFieldBody">
+                            <!-- Các trường hiển thị động -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</main>
+
+<!-- FOOTER -->
+<footer class="app-footer">
+    <p>Hệ thống Nhập liệu hỗ trợ Giọng nói</p>
+    <p>Nhập liệu cho bất kỳ biểu mẫu nào</p>
+</footer>
+
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div id="toast" class="toast">Thông báo hệ thống</div>
+
+
+</body>
+<script src="app.js"></script>
+
+</html>

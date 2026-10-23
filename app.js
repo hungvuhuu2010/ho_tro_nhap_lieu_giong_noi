@@ -561,14 +561,23 @@ document.addEventListener('fullscreenchange', () => {
     }
 });
 
-// --- TẠO TỆP MẪU TRỐNG ---
+// --- TẠO TỆP MẪU TRỐNG DỰA TRÊN BẢNG CẤU HÌNH ---
 document.getElementById('btnCreateNewTemplate').addEventListener('click', () => {
-    let rows = [tableHeaders];
+    // Thu thập trực tiếp danh sách tên trường từ mảng tableHeaders (đại diện cho cấu hình hiện tại)
+    // Hoặc quét trực tiếp từ giao diện bảng configFieldTable nếu muốn chắc chắn
+    let headersToExport = [...tableHeaders];
+    
+    if (headersToExport.length === 0) {
+        showToast('Chưa có trường thông tin nào được cấu hình!', true);
+        return;
+    }
+
+    let rows = [headersToExport];
     const newWs = XLSX.utils.aoa_to_sheet(rows);
     const newWb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(newWb, newWs, "DuLieuNhapLieu");
     XLSX.writeFile(newWb, "MauNhapLieuMoi.xlsx");
-    showToast('Đã tạo và tải xuống tệp mẫu Excel!');
+    showToast('Đã tạo và tải xuống tệp mẫu Excel từ các trường cấu hình!');
 });
 
 // --- CẢNH BÁO KHI ĐÓNG TAB ---

@@ -113,7 +113,7 @@ body {
 .app-header h1 {
 
     font-size:
-        25px;
+        18px;
 
     font-weight:
         700;
@@ -2215,4 +2215,22 @@ textarea:focus {
     top: 0;
     background-color: #f3f4f6; /* Màu nền tiêu đề khi cuộn qua */
     z-index: 10;
+}
+
+
+.fullscreen-btn {
+    background: #dcfce7;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    color: #4b5563;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.fullscreen-btn:hover {
+    background: #e2e8f0;
 }

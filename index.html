@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ứng dụng Nhập liệu Giọng nói Excel</title>
+    <title>Nhập Liệu Excel bằng giọng nói</title>
     <!-- Nhúng thư viện SheetJS (xlsx) để đọc và ghi tệp Excel trên trình duyệt -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="style.css">
@@ -14,12 +14,15 @@
     <!-- HEADER -->
     <header class="app-header">
         <div>
-            <h1>Ứng Dụng Nhập Liệu Giọng Nói Excel</h1>
-            <p>Hỗ trợ đọc giọng nói tiếng Việt, chuẩn hóa dữ liệu và lưu trực tiếp vào tệp Excel (.xlsx)</p>
+            <h1 style="padding: 3px 6px;">Nhập Liệu Excel bằng giọng nói</h1>
+			<P style="padding: 3px 6px;">Tác giả: Vũ Hữu Hùng, trường THPT Nguyễn Trãi - Thường Tín</P>
         </div>
         <div class="header-actions" style="display: flex; gap: 10px; align-items: center;">
-            <button class="button secondary" id="btnFullScreen" onclick="toggleFullScreen()" title="Phóng to toàn màn hình" style="padding: 8px 12px; font-size: 14px;">🖥️ Toàn màn hình</button>
-            <div class="header-status">
+            <button id="btnFullScreen" onclick="toggleFullScreen()" class="fullscreen-btn" title="Toàn màn hình">
+				⛶
+			</button>
+			
+			<div class="header-status">
                 <span id="fileStatusBadge" class="status-badge">Chưa mở tệp Excel</span>
             </div>
         </div>

@@ -15,6 +15,87 @@ let fieldConfigs = {
 const DB_NAME = "ExcelVoiceAppDB";
 const STORE_NAME = "fileStore";
 
+
+let customDictionary = {}; // Lưu trữ từ điển thay thế
+
+// Tự động tải file từ điển khi ứng dụng khởi động
+async function loadDictionary() {
+    try {
+        const response = await fetch('dictionary.txt');
+        if (response.ok) {
+            const textContent = await response.text();
+            parseDictionaryText(textContent);
+            console.log("Đã nạp thành công từ điển .txt:", customDictionary);
+        }
+    } catch (err) {
+        console.warn("Không tìm thấy tệp dictionary.txt, sử dụng từ điển mặc định.");
+        customDictionary = {
+            "a còng": "@",
+            "gạch dưới": "_",
+            "chấm": ".",
+            "phẩy": ",",
+            "chấm phẩy": ";"
+        };
+    }
+}
+
+// Gọi hàm nạp từ điển ngay trong sự kiện DOMContentLoaded
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadDictionary();
+    // ... các đoạn code khởi tạo cũ khác (renderConfigTable, renderDynamicForm, v.v.)
+});
+
+
+// --- HÀM TRA CỨU VÀ THAY THẾ DỰA TRÊN TỪ ĐIỂN ---
+// Hàm phân tích nội dung tệp txt 2 cột (hỗ trợ phân tách bằng dấu '|', tab hoặc dấu ':')
+function parseDictionaryText(text) {
+    customDictionary = {};
+    const lines = text.split('\n');
+    
+    lines.forEach(line => {
+        // Loại bỏ khoảng trắng thừa ở đầu/cuối dòng
+        let cleanLine = line.trim();
+        
+        // Bỏ qua các dòng trống hoặc dòng chú thích bắt đầu bằng dấu #
+        if (!cleanLine || cleanLine.startsWith('#')) return;
+
+        // Tách 2 cột dựa vào ký tự phân cách ('|', tab '\t', hoặc ':')
+        let parts = [];
+        if (cleanLine.includes('|')) {
+            parts = cleanLine.split('|');
+        } else if (cleanLine.includes('\t')) {
+            parts = cleanLine.split('\t');
+        } else if (cleanLine.includes(':')) {
+            parts = cleanLine.split(':');
+        }
+
+        if (parts.length >= 2) {
+            let key = parts[0].trim().toLowerCase();
+            let value = parts[1].trim();
+            if (key) {
+                customDictionary[key] = value;
+            }
+        }
+    });
+}
+
+// Hàm tra cứu và thay thế dựa trên từ điển
+function applyDictionary(text) {
+    if (!text || typeof text !== 'string') return text;
+    
+    let processed = text.toLowerCase();
+
+    // Sắp xếp các key theo độ dài giảm dần để ưu tiên khớp cụm từ dài trước
+    const sortedKeys = Object.keys(customDictionary).sort((a, b) => b.length - a.length);
+
+    sortedKeys.forEach(key => {
+        const regex = new RegExp(`\\b${key}\\b`, 'gi');
+        processed = processed.replace(regex, customDictionary[key]);
+    });
+
+    return processed;
+}
+
 function openDatabase() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, 1);
@@ -63,12 +144,15 @@ window.switchTab = function(tabId) {
 
     // Đồng bộ nút tab đang active dựa vào tabId
     if (tabId === 'inputTab') {
-        const btn = document.querySelector('.tab-btn[onclick*="inputTab"]');
-        if (btn) btn.classList.add('active');
-    } else if (tabId === 'configTab') {
-        const btn = document.querySelector('.tab-btn[onclick*="configTab"]');
-        if (btn) btn.classList.add('active');
-    }
+		const btn = document.querySelector('.tab-btn[onclick*="inputTab"]');
+		if (btn) btn.classList.add('active');
+	} else if (tabId === 'configTab') {
+		const btn = document.querySelector('.tab-btn[onclick*="configTab"]');
+		if (btn) btn.classList.add('active');
+	} else if (tabId === 'richVoiceTab') {
+		const btn = document.querySelector('.tab-btn[onclick*="richVoiceTab"]');
+		if (btn) btn.classList.add('active');
+	}
 };
 
 // --- HIỂN THỊ THÔNG BÁO TOAST ---
@@ -114,7 +198,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// --- QUẢN LÝ CẤU HÌNH TRƯỜNG ---
+// --- SỰ KIỆN THÊM TRƯỜNG MỚI (ĐẢM BẢO GIỮ ĐÚNG THỨ TỰ THÊM) ---
 document.getElementById('btnAddField').addEventListener('click', () => {
     const nameInput = document.getElementById('newFieldName');
     const typeSelect = document.getElementById('newFieldType');
@@ -124,21 +208,29 @@ document.getElementById('btnAddField').addEventListener('click', () => {
         showToast('Vui lòng nhập tên trường thông tin!', true);
         return;
     }
+    
+    // Kiểm tra xem trường đã tồn tại trong mảng tableHeaders chưa
     if (tableHeaders.includes(fieldName)) {
         showToast('Trường này đã tồn tại!', true);
         return;
     }
 
+    // Đẩy trực tiếp vào cuối mảng tableHeaders để giữ nguyên thứ tự thêm vào
     tableHeaders.push(fieldName);
+    
+    // Gán cấu hình cho trường tương ứng
     fieldConfigs[fieldName] = {
         type: typeSelect.value,
-        format: typeSelect.value === 'date' ? 'date_normalize' : 'capitalize_words'
+        format: typeSelect.value === 'date' ? 'date_normalize' : (typeSelect.value === 'email' ? 'email_normalize' : 'capitalize_words')
     };
 
     nameInput.value = '';
+    
+    // Gọi lại các hàm vẽ giao diện để cập nhật ngay lập tức theo đúng thứ tự mảng tableHeaders
     renderConfigTable();
     renderDynamicForm();
     renderDataTable();
+    
     showToast(`Đã thêm trường "${fieldName}" thành công!`);
 });
 
@@ -189,7 +281,6 @@ window.updateFieldType = function(header, type) {
 };
 
 
-// --- SINH BIỂU MẪU NHẬP LIỆU ĐỘNG ---
 // --- SINH BIỂU MẪU NHẬP LIỆU ĐỘNG ---
 function renderDynamicForm() {
     const container = document.getElementById('dynamicFormContainer');
@@ -248,9 +339,13 @@ function renderDynamicForm() {
         html += `
             <div class="form-group ${tableHeaders.length % 2 !== 0 && index === tableHeaders.length - 1 ? 'full-width' : ''}">
                 <label>${header}</label>
-                <div style="display: flex; gap: 8px; width: 100%;">
-                    <input type="${config.type === 'number' ? 'number' : 'text'}" id="input_field_${index}" placeholder="Nhập hoặc đọc giọng nói..." style="flex: 1;">
-                    <button type="button" class="button secondary" onclick="startSpeechToText(${index})" title="Đọc giọng nói tiếng Việt">🎙️ Nói</button>
+                <div style="display: flex; gap: 8px; width: 100%; align-items: flex-start;">
+                    <textarea id="input_field_${index}" 
+                              placeholder="Nhập hoặc đọc giọng nói..." 
+                              style="flex: 1;" 
+                              rows="1" 
+                              oninput="autoResizeTextarea(this)"></textarea>
+                    <button type="button" class="button secondary" onclick="startSpeechToText(${index})" title="Đọc giọng nói tiếng Việt" style="margin-top: 0;">🎙️ Nói</button>
                 </div>
                 ${formatOptionsHtml}
             </div>
@@ -261,6 +356,12 @@ function renderDynamicForm() {
     container.innerHTML = html;
 }
 
+// --- HÀM TỰ ĐỘNG MỞ RỘNG CHIỀU CAO TEXTAREA THEO NỘI DUNG ---
+window.autoResizeTextarea = function(element) {
+    element.style.height = 'auto'; // Reset chiều cao để tính toán lại
+    element.style.height = (element.scrollHeight) + 'px'; // Đặt chiều cao bằng đúng nội dung bên trong
+};
+
 window.updateFormatFlag = function(header, formatType, isChecked) {
     if (!fieldConfigs[header]) return;
     if (isChecked) {
@@ -270,84 +371,95 @@ window.updateFormatFlag = function(header, formatType, isChecked) {
     }
 };
 
-// --- TÍCH HỢP SPEECH-TO-TEXT TIẾNG VIỆT & XỬ LÝ TEXT THÔNG MINH ---
+// --- TÍCH HỢP SPEECH-TO-TEXT TỐC ĐỘ CAO (TỰ ĐỘNG GIẢI PHÓNG LUỒNG) ---
 window.startSpeechToText = function(index) {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        showToast('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói (Web Speech API). Hãy dùng Google Chrome hoặc Microsoft Edge!', true);
+        showToast('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói (Web Speech API).', true);
         return;
     }
 
+    const inputElem = document.getElementById(`input_field_${index}`);
+    const buttonElem = event.target; 
+    
     const recognition = new SpeechRecognition();
     recognition.lang = 'vi-VN';
-    recognition.interimResults = false;
+    recognition.interimResults = false; // Chỉ lấy kết quả cuối cùng để chốt nhanh
     recognition.maxAlternatives = 1;
 
-    const inputElem = document.getElementById(`input_field_${index}`);
-    showToast('Đang lắng nghe... Hãy nói rõ ràng.');
+    showToast('🎙️ Đang nghe... Hãy nói.');
+    if (buttonElem) {
+        buttonElem.textContent = '🔴 Đang nghe...';
+        buttonElem.disabled = true;
+    }
+    if (inputElem) {
+        inputElem.placeholder = 'Đang lắng nghe...';
+    }
 
     recognition.onresult = function(event) {
         let speechResult = event.results[0][0].transcript.trim();
         
+        // Xử lý từ điển và chuẩn hóa dữ liệu ngầm ngay lập tức
+        let processedText = applyDictionary(speechResult);
+        
         const header = tableHeaders[index];
         const config = fieldConfigs[header];
-        let processedText = speechResult;
 
         if (config) {
-            // Xử lý chung: các từ đọc thành ký tự đặc biệt cơ bản
-            processedText = processedText
-                .replace(/\b(dấu chấm|chấm)\b/gi, '.')
-                .replace(/\b(dấu phẩy|phẩy)\b/gi, ',')
-                .replace(/\b(chấm phẩy|dấu chấm phẩy)\b/gi, ';');
-
-            // --- XỬ LÝ RIÊNG CHO KIỂU DỮ LIỆU EMAIL ---
             if (config.type === 'email') {
-                // 1. Chuyển đổi các từ đọc giọng nói đặc thù của email thành ký tự chuẩn
-                processedText = processedText
-                    .replace(/\b(a còng|at|còng)\b/gi, '@')
-                    .replace(/\b(gạch dưới|dấu gạch dưới|underscore)\b/gi, '_')
-                    .replace(/\b(chấm|dấu chấm)\b/gi, '.');
-
-                // 2. Chuyển toàn bộ thành chữ thường (email chuẩn luôn viết thường)
-                processedText = processedText.toLowerCase();
-
-                // 3. Loại bỏ dấu tiếng Việt (Normalize Unicode)
-                processedText = processedText.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-                // Xử lý riêng ký tự đ/Đ tiếng Việt
-                processedText = processedText.replace(/[đĐ]/g, 'd');
-
-                // 4. Xóa bỏ toàn bộ khoảng trắng để viết liền mạch
-                processedText = processedText.replace(/\s+/g, '');
-                
+                processedText = processedText.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[đĐ]/g, 'd').replace(/\s+/g, '');
             } else if (config.type === 'date') {
-                let digits = processedText.replace(/\D/g, '');
-                if (digits.length >= 6) {
-                    let day = '', month = '', year = '';
-                    if (digits.length === 8) {
-                        day = digits.substring(0, 2);
-                        month = digits.substring(2, 4);
-                        year = digits.substring(4, 8);
-                    } else if (digits.length === 7) {
-                        year = digits.substring(digits.length - 4);
-                        let remain = digits.substring(0, digits.length - 4);
-                        if (remain.length === 3) {
-                            day = '0' + remain.substring(0, 1);
-                            month = remain.substring(1, 3);
+                let text = processedText.toLowerCase();
+                let day = '', month = '', year = '';
+
+                // Bắt cú pháp có từ "tháng" và "năm" (VD: "12 tháng 10 năm 1990" hoặc "3 tháng 9 năm 68")
+                let matchThangNam = text.match(/(?:ngày\s*)?(\d{1,2})\s*tháng\s*(\d{1,2})(?:\s*năm\s*(\d{2,4}))?/i);
+                
+                if (matchThangNam) {
+                    day = matchThangNam[1].padStart(2, '0');
+                    month = matchThangNam[2].padStart(2, '0');
+                    let rawYear = matchThangNam[3];
+                    
+                    if (rawYear) {
+                        // Nếu năm đọc dạng viết tắt 2 chữ số (VD: "68" -> 1968 hoặc 2068, mặc định nếu > 50 là 19xx, ngược lại 20xx)
+                        if (rawYear.length === 2) {
+                            year = (parseInt(rawYear, 10) > 50 ? '19' : '20') + rawYear;
                         } else {
-                            day = remain.substring(0, 2);
-                            month = '0' + remain.substring(2, 3);
+                            year = rawYear;
                         }
-                    } else if (digits.length === 6) {
-                        day = '0' + digits.substring(0, 1);
-                        month = digits.substring(1, 3);
-                        year = digits.substring(3, 7);
+                    } else {
+                        // Nếu không đọc năm, lấy năm hiện tại hoặc để trống tùy bạn (ở đây tạm lấy năm hiện tại 2026)
+                        year = new Date().getFullYear().toString();
                     }
-                    if (day && month && year) {
-                        processedText = `${day}/${month}/${year}`;
+                    processedText = `${day}/${month}/${year}`;
+                } else {
+                    // Fallback: Nếu đọc thuần túy các con số (VD: 12051990 hoặc 12 05 1990)
+                    let digits = text.replace(/\D/g, '');
+                    if (digits.length >= 6) {
+                        if (digits.length === 8) {
+                            day = digits.substring(0, 2);
+                            month = digits.substring(2, 4);
+                            year = digits.substring(4, 8);
+                        } else if (digits.length === 6) {
+                            day = '0' + digits.substring(0, 1);
+                            month = digits.substring(1, 3);
+                            year = digits.substring(3, 7);
+                        } else {
+                            processedText = ''; // Không đúng chuẩn cấu trúc số ngày tháng -> Trả về rỗng
+                        }
+                        
+                        if (day && month && year) {
+                            processedText = `${day}/${month}/${year}`;
+                        } else {
+                            processedText = '';
+                        }
+                    } else {
+                        // 🛑 Nếu không bắt được cấu trúc ngày tháng hợp lệ nào -> Trả về rỗng thay vì ghi lung tung
+                        processedText = '';
                     }
                 }
             } else {
-                processedText = processedText.replace(/\s+([.,;])/g, '$1').trim();
+                processedText = processedText.trim().replace(/[\.,;]+$/, '');
                 if (config.format === 'capitalize_words') {
                     processedText = processedText.toLowerCase().replace(/(^|\s)\S/g, l => l.toUpperCase());
                 } else if (config.format === 'uppercase') {
@@ -356,12 +468,37 @@ window.startSpeechToText = function(index) {
             }
         }
 
-        if (inputElem) inputElem.value = processedText;
-        showToast('Đã nhận diện giọng nói thành công!');
+        if (inputElem) {
+            inputElem.value = processedText;
+            inputElem.placeholder = 'Nhập hoặc đọc giọng nói...';
+            autoResizeTextarea(inputElem);
+        }
+        
+        // Giải phóng nút ngay khi có kết quả để sang ô khác
+        if (buttonElem) {
+            buttonElem.textContent = '🎙️ Nói';
+            buttonElem.disabled = false;
+        }
     };
 
     recognition.onerror = function(event) {
-        showToast('Lỗi nhận diện giọng nói: ' + event.error, true);
+        if (inputElem) inputElem.placeholder = 'Nhập hoặc đọc giọng nói...';
+        if (buttonElem) {
+            buttonElem.textContent = '🎙️ Nói';
+            buttonElem.disabled = false;
+        }
+        if (event.error === 'aborted') return;
+        showToast('Lỗi nhận diện: ' + event.error, true);
+    };
+
+    recognition.onend = function() {
+        if (buttonElem && buttonElem.disabled) {
+            buttonElem.textContent = '🎙️ Nói';
+            buttonElem.disabled = false;
+        }
+        if (inputElem) {
+            inputElem.placeholder = 'Nhập hoặc đọc giọng nói...';
+        }
     };
 
     recognition.start();
@@ -555,21 +692,154 @@ document.addEventListener('fullscreenchange', () => {
     const btn = document.getElementById('btnFullScreen');
     if (!btn) return;
     if (document.fullscreenElement) {
-        btn.textContent = '❌ Thoát Fullscreen';
+        btn.textContent = '⛶';
     } else {
-        btn.textContent = '🖥️ Toàn màn hình';
+        btn.textContent = '⛶';
     }
 });
 
-// --- TẠO TỆP MẪU TRỐNG ---
+// --- TẠO TỆP MẪU TRỐNG DỰA TRÊN BẢNG CẤU HÌNH ---
 document.getElementById('btnCreateNewTemplate').addEventListener('click', () => {
-    let rows = [tableHeaders];
+    // Thu thập trực tiếp danh sách tên trường từ mảng tableHeaders (đại diện cho cấu hình hiện tại)
+    // Hoặc quét trực tiếp từ giao diện bảng configFieldTable nếu muốn chắc chắn
+    let headersToExport = [...tableHeaders];
+    
+    if (headersToExport.length === 0) {
+        showToast('Chưa có trường thông tin nào được cấu hình!', true);
+        return;
+    }
+
+    let rows = [headersToExport];
     const newWs = XLSX.utils.aoa_to_sheet(rows);
     const newWb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(newWb, newWs, "DuLieuNhapLieu");
     XLSX.writeFile(newWb, "MauNhapLieuMoi.xlsx");
-    showToast('Đã tạo và tải xuống tệp mẫu Excel!');
+    showToast('Đã tạo và tải xuống tệp mẫu Excel từ các trường cấu hình!');
 });
+
+// --- XỬ LÝ SOẠN THẢO RICH TEXT & NHẬP LIỆU GIỌNG NÓI ---
+
+// 1. Nhận diện giọng nói và nạp nối tiếp vào Rich Editor
+window.startRichSpeechToText = function() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        showToast('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói (Web Speech API).', true);
+        return;
+    }
+
+    const editor = document.getElementById('richEditor');
+    const btn = document.getElementById('btnRichVoice');
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'vi-VN'; // Ngôn ngữ Tiếng Việt
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    showToast('🎙️ Đang nghe... Hãy nói.');
+    if (btn) {
+        btn.textContent = '🔴 Đang nghe...';
+        btn.disabled = true;
+    }
+
+    recognition.onresult = function(event) {
+        // SỬA TẠI ĐÂY: Truy cập cấp [0][0] để lấy chuỗi văn bản
+        let speechResult = event.results[0][0].transcript.trim();
+        
+        // Áp dụng từ điển chuẩn hóa nếu có
+        if (typeof applyDictionary === 'function') {
+            speechResult = applyDictionary(speechResult);
+        }
+
+        if (editor) {
+            editor.focus();
+            
+            // Tự động thêm khoảng trắng trước câu mới nếu editor đã có văn bản
+            const currentContent = editor.innerText.trim();
+            const textToInsert = (currentContent.length > 0 ? ' ' : '') + speechResult;
+            
+            // Chèn văn bản tại vị trí con trỏ hiện tại
+            document.execCommand('insertText', false, textToInsert);
+        }
+    };
+
+
+    recognition.onerror = function(event) {
+        if (btn) {
+            btn.textContent = '🎙️ Nói';
+            btn.disabled = false;
+        }
+        if (event.error === 'aborted') return;
+        showToast('Lỗi nhận diện: ' + event.error, true);
+    };
+
+    recognition.onend = function() {
+        if (btn) {
+            btn.textContent = '🎙️ Nói';
+            btn.disabled = false;
+        }
+    };
+
+    recognition.start();
+};
+
+// 2. Các hàm định dạng văn bản (Đậm, Nghiêng, Gạch chân, Màu chữ)
+window.formatText = function(command) {
+    document.getElementById('richEditor').focus();
+    document.execCommand(command, false, null);
+};
+
+window.changeTextColor = function(colorHex) {
+    document.getElementById('richEditor').focus();
+    document.execCommand('foreColor', false, colorHex);
+};
+
+// 3. Sao chép văn bản định dạng (dán vào Word, Google Docs giữ nguyên style)
+window.copyFormattedText = async function() {
+    const editor = document.getElementById('richEditor');
+    if (!editor || !editor.innerText.trim()) {
+        showToast('Chưa có nội dung để sao chép!', true);
+        return;
+    }
+
+    const htmlContent = editor.innerHTML;
+    const textContent = editor.innerText;
+
+    try {
+        if (navigator.clipboard && window.ClipboardItem) {
+            const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+            const blobText = new Blob([textContent], { type: 'text/plain' });
+            const data = [new ClipboardItem({
+                'text/html': blobHtml,
+                'text/plain': blobText
+            })];
+            await navigator.clipboard.write(data);
+            showToast('📋 Đã sao chép văn bản định dạng! Có thể dán trực tiếp vào Word hoặc Google Docs.');
+        } else {
+            // Phương án dự phòng (fallback) cho trình duyệt cũ
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            document.execCommand('copy');
+            selection.removeAllRanges();
+            showToast('📋 Đã sao chép văn bản!');
+        }
+    } catch (err) {
+        console.error('Lỗi sao chép:', err);
+        showToast('Không thể sao chép định dạng: ' + err.message, true);
+    }
+};
+
+// 4. Xóa nội dung khung soạn thảo
+window.clearRichEditor = function() {
+    const editor = document.getElementById('richEditor');
+    if (editor && editor.innerText.trim() && confirm('Bạn có chắc chắn muốn xóa toàn bộ nội dung?')) {
+        editor.innerHTML = '';
+        showToast('Đã xóa nội dung.');
+    }
+};
+
 
 // --- CẢNH BÁO KHI ĐÓNG TAB ---
 window.addEventListener('beforeunload', (e) => {

@@ -1,7 +1,0 @@
-gạch dưới | _
-gạch nối | -
-gạch xiên | /
-chấm | .
-phẩy | ,
-gmail chấm com | gmail.com
-chấm vn | .vn

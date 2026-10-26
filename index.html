@@ -32,6 +32,7 @@
 <div class="app-tabs">
     <button class="tab-btn active" onclick="switchTab('inputTab')">Nhập liệu</button>
     <button class="tab-btn" onclick="switchTab('configTab')">Chọn tệp cơ sở dữ liệu hoặc tạo mẫu</button>
+	<button class="tab-btn" onclick="switchTab('richVoiceTab')">Soạn Thảo Giọng Nói (Rich Text)</button>
 </div>
 
 <!-- MAIN CONTENT -->
@@ -65,7 +66,6 @@
                 <div class="section-number">2</div>
                 <div>
                     <h2>Bảng Dữ Liệu Trực Quan</h2>
-                    <p>Dữ liệu được cập nhật tức thì và lưu thẳng vào tệp Excel khi bấm Thêm.</p>
                 </div>
             </div>
 
@@ -157,7 +157,42 @@
         </div>
 
     </div>
+	
+	
+	<!-- TAB 3: SOẠN THẢO VĂN BẢN GIỌNG NÓI & RICH TEXT -->
+	<div id="richVoiceTab" class="tab-content">
+		<div class="card">
+			<div class="section-title">
+				<div class="section-number">3</div>
+				<div>
+					<h2>Soạn Thảo Văn Bản Bằng Giọng Nói (Rich Text)</h2>
+					<p>Nói để nhập văn bản tiếng Việt, tùy chỉnh định dạng và sao chép giữ nguyên định dạng để dán vào Word/Google Docs.</p>
+				</div>
+			</div>
 
+			<!-- Thanh công cụ định dạng (Formatting Toolbar) -->
+			<div class="rich-toolbar">
+				<button type="button" class="button secondary" onclick="startRichSpeechToText()" id="btnRichVoice">🎙️ Nói</button>
+				<span class="toolbar-divider"></span>
+				
+				<button type="button" class="button secondary btn-format" onclick="formatText('bold')" title="In đậm (Bold)"><b>B</b></button>
+				<button type="button" class="button secondary btn-format" onclick="formatText('italic')" title="In nghiêng (Italic)"><i>I</i></button>
+				<button type="button" class="button secondary btn-format" onclick="formatText('underline')" title="Gạch chân (Underline)"><u>U</u></button>
+				
+				<div class="color-picker-wrapper" title="Màu chữ">
+					<label for="textColorPicker" style="font-size: 13px; font-weight: 600; cursor: pointer;">🎨 Màu:</label>
+					<input type="color" id="textColorPicker" value="#000000" onchange="changeTextColor(this.value)" style="width: 30px; height: 30px; border: none; cursor: pointer; background: none;">
+				</div>
+
+				<span class="toolbar-divider"></span>
+				<button type="button" class="button primary" onclick="copyFormattedText()" id="btnCopyRich">📋 Sao Chép Định Dạng</button>
+				<button type="button" class="button secondary" onclick="clearRichEditor()">🗑️ Xóa tất cả</button>
+			</div>
+
+			<!-- Khung nhập liệu Rich Text (ContentEditable) -->
+			<div id="richEditor" class="rich-editor" contenteditable="true" placeholder="Bấm nút 'Nói' hoặc gõ nội dung vào đây..."></div>
+		</div>
+	</div>
 </main>
 
 <!-- FOOTER -->

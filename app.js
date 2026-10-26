@@ -18,25 +18,72 @@ const STORE_NAME = "fileStore";
 
 let customDictionary = {}; // Lưu trữ từ điển thay thế
 
-// Tự động tải file từ điển khi ứng dụng khởi động
+// Đường dẫn link Google Sheets (dạng CSV) hoặc Google Drive Direct Link
+const GOOGLE_DICTIONARY_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSixHLR6alohpXb6LkJLWJU6DrjoIKvmJu5_I7mIceusYyCvfQopXl4TNvLoku9i5paQiW9aP9uetew/pubhtml";
+
 async function loadDictionary() {
+    if (!GOOGLE_DICTIONARY_URL || GOOGLE_DICTIONARY_URL.includes('DÁN_LINK')) {
+        setDefaultDictionary();
+        return;
+    }
+
     try {
-        const response = await fetch('dictionary.txt');
-        if (response.ok) {
-            const textContent = await response.text();
+        const response = await fetch(GOOGLE_DICTIONARY_URL);
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+        const textContent = await response.text();
+
+        // Kiểm tra nếu nội dung nhận được là trang web HTML hoặc có mã mã hóa JS thừa
+        const cleanContent = textContent.trim();
+        if (cleanContent.startsWith('<!DOCTYPE') || cleanContent.startsWith('<html') || cleanContent.includes('string.prototype')) {
+            throw new Error("Mã Google trả về là trang HTML/Script chứ không phải tệp CSV/TXT thuần túy.");
+        }
+
+        if (GOOGLE_DICTIONARY_URL.includes('output=csv') || GOOGLE_DICTIONARY_URL.includes('gviz')) {
+            parseGoogleSheetCSV(textContent);
+        } else {
             parseDictionaryText(textContent);
-            console.log("Đã nạp thành công từ điển .txt:", customDictionary);
+        }
+
+        console.log("Đã nạp thành công từ điển trực tuyến:", customDictionary);
+        if (typeof showToast === 'function') {
+            showToast('Đã đồng bộ từ điển từ Google!');
         }
     } catch (err) {
-        console.warn("Không tìm thấy tệp dictionary.txt, sử dụng từ điển mặc định.");
-        customDictionary = {
-            "a còng": "@",
-            "gạch dưới": "_",
-            "chấm": ".",
-            "phẩy": ",",
-            "chấm phẩy": ";"
-        };
+        console.warn("Lỗi nạp từ điển trực tuyến:", err.message);
+        setDefaultDictionary();
     }
+}
+// Từ điển mặc định dự phòng khi không có mạng hoặc chưa kết nối tệp Google
+function setDefaultDictionary() {
+    customDictionary = {
+        "a còng": "@",
+        "gạch dưới": "_",
+        "chấm": ".",
+        "phẩy": ",",
+        "chấm phẩy": ";"
+    };
+}
+
+// Hàm bổ sung: Phân tích dữ liệu CSV từ Google Sheets
+function parseGoogleSheetCSV(csvText) {
+    customDictionary = {};
+    const lines = csvText.split('\n');
+    lines.forEach(line => {
+        let cleanLine = line.trim();
+        if (!cleanLine) return;
+
+        // Phân tách bằng dấu phẩy
+        const parts = cleanLine.split(',');
+        if (parts.length >= 2) {
+            // Loại bỏ dấu ngoặc kép thừa nếu có
+            let key = parts.replace(/^"|"$/g, '').trim().toLowerCase();
+            let value = parts[3].replace(/^"|"$/g, '').trim();
+            if (key) {
+                customDictionary[key] = value;
+            }
+        }
+    });
 }
 
 // Gọi hàm nạp từ điển ngay trong sự kiện DOMContentLoaded
@@ -79,18 +126,24 @@ function parseDictionaryText(text) {
     });
 }
 
+// Hàm thoát (escape) các ký tự đặc biệt trong Regex
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 // Hàm tra cứu và thay thế dựa trên từ điển
 function applyDictionary(text) {
     if (!text || typeof text !== 'string') return text;
-    
     let processed = text.toLowerCase();
 
     // Sắp xếp các key theo độ dài giảm dần để ưu tiên khớp cụm từ dài trước
     const sortedKeys = Object.keys(customDictionary).sort((a, b) => b.length - a.length);
 
     sortedKeys.forEach(key => {
-        const regex = new RegExp(`\\b${key}\\b`, 'gi');
-        processed = processed.replace(regex, customDictionary[key]);
+        if (!key) return;
+        // Thoát các ký tự đặc biệt trước khi đưa vào RegExp
+        const safeKey = escapeRegExp(key);
+        const regex = new RegExp(`\\b${safeKey}\\b`, 'gi');
+        processed = processed.replace(regex, customDictionary[key] || '');
     });
 
     return processed;
@@ -144,12 +197,15 @@ window.switchTab = function(tabId) {
 
     // Đồng bộ nút tab đang active dựa vào tabId
     if (tabId === 'inputTab') {
-        const btn = document.querySelector('.tab-btn[onclick*="inputTab"]');
-        if (btn) btn.classList.add('active');
-    } else if (tabId === 'configTab') {
-        const btn = document.querySelector('.tab-btn[onclick*="configTab"]');
-        if (btn) btn.classList.add('active');
-    }
+		const btn = document.querySelector('.tab-btn[onclick*="inputTab"]');
+		if (btn) btn.classList.add('active');
+	} else if (tabId === 'configTab') {
+		const btn = document.querySelector('.tab-btn[onclick*="configTab"]');
+		if (btn) btn.classList.add('active');
+	} else if (tabId === 'richVoiceTab') {
+		const btn = document.querySelector('.tab-btn[onclick*="richVoiceTab"]');
+		if (btn) btn.classList.add('active');
+	}
 };
 
 // --- HIỂN THỊ THÔNG BÁO TOAST ---
@@ -713,6 +769,129 @@ document.getElementById('btnCreateNewTemplate').addEventListener('click', () => 
     XLSX.writeFile(newWb, "MauNhapLieuMoi.xlsx");
     showToast('Đã tạo và tải xuống tệp mẫu Excel từ các trường cấu hình!');
 });
+
+// --- XỬ LÝ SOẠN THẢO RICH TEXT & NHẬP LIỆU GIỌNG NÓI ---
+
+// 1. Nhận diện giọng nói và nạp nối tiếp vào Rich Editor
+window.startRichSpeechToText = function() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        showToast('Trình duyệt của bạn không hỗ trợ nhận diện giọng nói (Web Speech API).', true);
+        return;
+    }
+
+    const editor = document.getElementById('richEditor');
+    const btn = document.getElementById('btnRichVoice');
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'vi-VN'; // Ngôn ngữ Tiếng Việt
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    showToast('🎙️ Đang nghe... Hãy nói.');
+    if (btn) {
+        btn.textContent = '🔴 Đang nghe...';
+        btn.disabled = true;
+    }
+
+    recognition.onresult = function(event) {
+        // SỬA TẠI ĐÂY: Truy cập cấp [0][0] để lấy chuỗi văn bản
+        let speechResult = event.results[0][0].transcript.trim();
+        
+        // Áp dụng từ điển chuẩn hóa nếu có
+        if (typeof applyDictionary === 'function') {
+            speechResult = applyDictionary(speechResult);
+        }
+
+        if (editor) {
+            editor.focus();
+            
+            // Tự động thêm khoảng trắng trước câu mới nếu editor đã có văn bản
+            const currentContent = editor.innerText.trim();
+            const textToInsert = (currentContent.length > 0 ? ' ' : '') + speechResult;
+            
+            // Chèn văn bản tại vị trí con trỏ hiện tại
+            document.execCommand('insertText', false, textToInsert);
+        }
+    };
+
+
+    recognition.onerror = function(event) {
+        if (btn) {
+            btn.textContent = '🎙️ Nói';
+            btn.disabled = false;
+        }
+        if (event.error === 'aborted') return;
+        showToast('Lỗi nhận diện: ' + event.error, true);
+    };
+
+    recognition.onend = function() {
+        if (btn) {
+            btn.textContent = '🎙️ Nói';
+            btn.disabled = false;
+        }
+    };
+
+    recognition.start();
+};
+
+// 2. Các hàm định dạng văn bản (Đậm, Nghiêng, Gạch chân, Màu chữ)
+window.formatText = function(command) {
+    document.getElementById('richEditor').focus();
+    document.execCommand(command, false, null);
+};
+
+window.changeTextColor = function(colorHex) {
+    document.getElementById('richEditor').focus();
+    document.execCommand('foreColor', false, colorHex);
+};
+
+// 3. Sao chép văn bản định dạng (dán vào Word, Google Docs giữ nguyên style)
+window.copyFormattedText = async function() {
+    const editor = document.getElementById('richEditor');
+    if (!editor || !editor.innerText.trim()) {
+        showToast('Chưa có nội dung để sao chép!', true);
+        return;
+    }
+
+    const htmlContent = editor.innerHTML;
+    const textContent = editor.innerText;
+
+    try {
+        if (navigator.clipboard && window.ClipboardItem) {
+            const blobHtml = new Blob([htmlContent], { type: 'text/html' });
+            const blobText = new Blob([textContent], { type: 'text/plain' });
+            const data = [new ClipboardItem({
+                'text/html': blobHtml,
+                'text/plain': blobText
+            })];
+            await navigator.clipboard.write(data);
+            showToast('📋 Đã sao chép văn bản định dạng! Có thể dán trực tiếp vào Word hoặc Google Docs.');
+        } else {
+            // Phương án dự phòng (fallback) cho trình duyệt cũ
+            const range = document.createRange();
+            range.selectNodeContents(editor);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+            document.execCommand('copy');
+            selection.removeAllRanges();
+            showToast('📋 Đã sao chép văn bản!');
+        }
+    } catch (err) {
+        console.error('Lỗi sao chép:', err);
+        showToast('Không thể sao chép định dạng: ' + err.message, true);
+    }
+};
+
+// 4. Xóa nội dung khung soạn thảo
+window.clearRichEditor = function() {
+    const editor = document.getElementById('richEditor');
+    if (editor && editor.innerText.trim() && confirm('Bạn có chắc chắn muốn xóa toàn bộ nội dung?')) {
+        editor.innerHTML = '';
+        showToast('Đã xóa nội dung.');
+    }
+};
 
 
 // --- CẢNH BÁO KHI ĐÓNG TAB ---
